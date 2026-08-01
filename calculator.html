@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0F172A;
+    --panel:#111C34;
+    --accent:#2563EB;
+    --accent-soft:#3B82F6;
+    --key:#1B2A4A;
+    --key-hover:#233A63;
+    --muted:#8CA0C6;
+    --white:#F8FAFC;
+    --danger:#F97362;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(circle at 20% -10%, rgba(37,99,235,0.25), transparent 45%),
+      var(--ink);
+    font-family:'JetBrains Mono', monospace;
+    color:var(--white);
+    padding:24px;
+  }
+  .calc{
+    width:340px;
+    background:var(--panel);
+    border-radius:28px;
+    padding:24px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.06);
+  }
+  .brand{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:13px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:2px 4px 18px;
+    font-weight:500;
+  }
+  .display{
+    padding:18px 16px 14px;
+    text-align:right;
+    margin-bottom:18px;
+    min-height:88px;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    gap:6px;
+  }
+  .expression{
+    font-size:15px;
+    color:var(--muted);
+    min-height:18px;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  .result{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:42px;
+    font-weight:700;
+    line-height:1;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  .keys{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:10px;
+  }
+  button{
+    border:none;
+    border-radius:16px;
+    background:var(--key);
+    color:var(--white);
+    font-family:'Space Grotesk', sans-serif;
+    font-size:19px;
+    font-weight:500;
+    padding:18px 0;
+    cursor:pointer;
+    transition:transform 0.06s ease, background 0.15s ease;
+  }
+  button:hover{ background:var(--key-hover); }
+  button:active{ transform:scale(0.94); }
+  button.op{
+    background:rgba(37,99,235,0.16);
+    color:var(--accent-soft);
+  }
+  button.op:hover{ background:rgba(37,99,235,0.28); }
+  button.equals{
+    background:var(--accent);
+    color:#fff;
+    grid-column:span 2;
+  }
+  button.equals:hover{ background:#1D4ED8; }
+  button.clear{
+    color:var(--danger);
+  }
+  button.zero{ grid-column:span 2; }
+  .keys button:focus-visible{
+    outline:2px solid var(--accent-soft);
+    outline-offset:2px;
+  }
+</style>
+</head>
+<body>
+  <div class="calc">
+    <div class="brand">Calculator</div>
+    <div class="display">
+      <div class="expression" id="expression">&nbsp;</div>
+      <div class="result" id="result">0</div>
+    </div>
+    <div class="keys">
+      <button class="clear" data-action="clear">AC</button>
+      <button class="op" data-action="sign">+/-</button>
+      <button class="op" data-action="percent">%</button>
+      <button class="op" data-value="/">÷</button>
+
+      <button data-value="7">7</button>
+      <button data-value="8">8</button>
+      <button data-value="9">9</button>
+      <button class="op" data-value="*">×</button>
+
+      <button data-value="4">4</button>
+      <button data-value="5">5</button>
+      <button data-value="6">6</button>
+      <button class="op" data-value="-">−</button>
+
+      <button data-value="1">1</button>
+      <button data-value="2">2</button>
+      <button data-value="3">3</button>
+      <button class="op" data-value="+">+</button>
+
+      <button class="zero" data-value="0">0</button>
+      <button data-value=".">.</button>
+      <button class="equals" data-action="equals">=</button>
+    </div>
+  </div>
+
+<script>
+  // ---- Calculator state ----
+  // We keep the expression as a string of tokens (numbers + operators)
+  // rather than evaluating after every keypress, so operator precedence
+  // (× and ÷ before + and −) is respected.
+  let expression = '';
+  let justEvaluated = false;
+
+  const expressionEl = document.getElementById('expression');
+  const resultEl = document.getElementById('result');
+
+  const OPERATORS = ['+', '-', '*', '/'];
+
+  function lastChar(){
+    return expression.slice(-1);
+  }
+
+  function isOperator(ch){
+    return OPERATORS.includes(ch);
+  }
+
+  function formatForDisplay(str){
+    return str
+      .replaceAll('*', '×')
+      .replaceAll('/', '÷');
+  }
+
+  function appendValue(value){
+    if(justEvaluated){
+      // Start a fresh expression after "=", unless they tap an operator
+      // (in which case continue from the previous result).
+      expression = isOperator(value) ? resultEl.textContent : '';
+      justEvaluated = false;
+    }
+
+    if(isOperator(value)){
+      if(expression === '' && value !== '-') return; // no leading operator except minus
+      if(isOperator(lastChar())){
+        expression = expression.slice(0, -1) + value; // replace trailing operator
+      } else {
+        expression += value;
+      }
+    } else if(value === '.'){
+      // Prevent multiple decimals in the current number segment
+      const segments = expression.split(/[+\-*/]/);
+      const current = segments[segments.length - 1];
+      if(current.includes('.')) return;
+      expression += (current === '' ? '0.' : '.');
+    } else {
+      expression += value;
+    }
+
+    render();
+  }
+
+  function clearAll(){
+    expression = '';
+    justEvaluated = false;
+    render();
+  }
+
+  function toggleSign(){
+    // Flip the sign of the last number segment in the expression
+    const match = expression.match(/(-?\d+\.?\d*)$/);
+    if(!match) return;
+    const num = match[0];
+    const flipped = num.startsWith('-') ? num.slice(1) : '-' + num;
+    expression = expression.slice(0, match.index) + flipped;
+    render();
+  }
+
+  function applyPercent(){
+    const match = expression.match(/(-?\d+\.?\d*)$/);
+    if(!match) return;
+    const num = parseFloat(match[0]);
+    const percented = (num / 100).toString();
+    expression = expression.slice(0, match.index) + percented;
+    render();
+  }
+
+  function evaluate(){
+    if(expression === '') return;
+    let safeExpr = expression;
+    if(isOperator(lastChar())) safeExpr = safeExpr.slice(0, -1);
+
+    try{
+      // Expression only ever contains digits, ., and + - * /, so this is safe.
+      const value = Function('"use strict"; return (' + safeExpr + ')')();
+      const rounded = Math.round((value + Number.EPSILON) * 1e10) / 1e10;
+      resultEl.textContent = rounded.toString();
+      expressionEl.textContent = formatForDisplay(expression) + ' =';
+      justEvaluated = true;
+    } catch(e){
+      resultEl.textContent = 'Error';
+      justEvaluated = true;
+      expression = '';
+    }
+  }
+
+  function render(){
+    expressionEl.textContent = expression ? formatForDisplay(expression) : '\u00A0';
+    if(!justEvaluated){
+      const match = expression.match(/(-?\d+\.?\d*)$/);
+      resultEl.textContent = match ? formatForDisplay(match[0]) : (expression ? formatForDisplay(expression) : '0');
+    }
+  }
+
+  document.querySelectorAll('button[data-value]').forEach(btn => {
+    btn.addEventListener('click', () => appendValue(btn.dataset.value));
+  });
+
+  document.querySelector('[data-action="clear"]').addEventListener('click', clearAll);
+  document.querySelector('[data-action="sign"]').addEventListener('click', toggleSign);
+  document.querySelector('[data-action="percent"]').addEventListener('click', applyPercent);
+  document.querySelector('[data-action="equals"]').addEventListener('click', evaluate);
+
+  // Keyboard support
+  window.addEventListener('keydown', (e) => {
+    if(/[0-9.]/.test(e.key)) appendValue(e.key);
+    else if(OPERATORS.includes(e.key)) appendValue(e.key);
+    else if(e.key === 'Enter' || e.key === '=') { e.preventDefault(); evaluate(); }
+    else if(e.key === 'Backspace'){
+      if(justEvaluated) clearAll();
+      else { expression = expression.slice(0, -1); render(); }
+    }
+    else if(e.key === 'Escape') clearAll();
+  });
+</script>
+</body>
+</html>
